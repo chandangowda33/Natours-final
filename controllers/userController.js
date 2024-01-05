@@ -55,6 +55,8 @@ exports.resizeUserPhoto = (req, res, next) => {
   //     //formating the file name
   req.file.filename = `user-${req.user.id}-${Date.now()}.${ext}`;
 
+  console.log();
+
   //files we stored in memory storage will be available in buffer
   sharp(req.file.buffer)
     //above returns the object on which we can do all image processing
@@ -73,15 +75,6 @@ const filterObj = (obj, ...allowedFields) => {
   });
   return newObj;
 };
-
-//using this as middleware and faking the loggged in id as param id
-exports.getMe = (req, res, next) => {
-  req.params.id = req.user.id;
-  next();
-};
-
-exports.getAllUsers = factory.getAll(User);
-
 exports.updateMe = catchAsync(async (req, res, next) => {
   //if user sends any password or change password data error it out
   if (req.body.password || req.body.passwordConfirm) {
@@ -97,6 +90,7 @@ exports.updateMe = catchAsync(async (req, res, next) => {
   const filterBody = filterObj(req.body, 'name', 'email');
   //updating the photo
   if (req.file) filterBody.photo = req.file.filename;
+  console.log(req.file);
   //here we are not changing any sensitive data and we dont want any validators to run so we using .findbyidandupdate
   const updatedUser = await User.findByIdAndUpdate(req.user.id, filterBody, {
     new: true,
@@ -110,6 +104,14 @@ exports.updateMe = catchAsync(async (req, res, next) => {
     }
   });
 });
+
+//using this as middleware and faking the loggged in id as param id
+exports.getMe = (req, res, next) => {
+  req.params.id = req.user.id;
+  next();
+};
+
+exports.getAllUsers = factory.getAll(User);
 
 //this is by user they can only make inactive
 exports.deleteMe = catchAsync(async (req, res, next) => {
