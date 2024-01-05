@@ -1,7 +1,70 @@
+//helps in uploading the files from form
+const multer = require('multer');
+//image processing
+const sharp = require('sharp');
 const User = require('./../models/userModel');
+
 const catchAsync = require('./../utils/catchAsync');
 const AppError = require('./../utils/appError');
 const factory = require('./handlerFactory');
+
+// const upload = multer({ dest: 'public/img/users' });
+
+//belwo is if we need to store image directly into disk
+// const multerStorage = multer.diskStorage({
+//   //cb like next in express
+//   destination: (req, file, cb) => {
+//     //first arguement should be error message if anything occurs
+//     cb(null, 'public/img/users');
+//   },
+//   filename: (req, file, cb) => {
+//     //in file object and mimetype field there will be extension
+//     const ext = file.mimetype.split('/')[1];
+//     //formating the file name
+//     cb(null, `user-${req.user.id}-${Date.now()}.${ext}`);
+//   }
+// });
+
+//but most user uploads large files and not squared shape files so first we save in localstorage
+//then after that we can process it using sharp
+const multerStorage = multer.memoryStorage();
+
+const multerFilter = (req, file, cb) => {
+  if (file.mimetype.startsWith('image')) {
+    cb(null, true);
+  } else {
+    cb(new AppError('Not an image! Please upload only images.', 400), false);
+  }
+};
+
+const upload = multer({
+  storage: multerStorage,
+  fileFilter: multerFilter
+});
+
+//.single to upload single file and photo is the field name
+exports.uploadUserPhoto = upload.single('photo');
+
+exports.resizeUserPhoto = (req, res, next) => {
+  console.log(`Here in resize`);
+  if (!req.file) {
+    return next();
+  }
+  //in file object and mimetype field there will be extension
+  const ext = req.file.mimetype.split('/')[1];
+  //     //formating the file name
+  req.file.filename = `user-${req.user.id}-${Date.now()}.${ext}`;
+
+  //files we stored in memory storage will be available in buffer
+  sharp(req.file.buffer)
+    //above returns the object on which we can do all image processing
+    .resize(500, 500)
+    .toFormat('jpeg')
+    .jpeg({ quality: 90 })
+    .toFile(`public/img/users/${req.file.filename}`);
+
+  next();
+};
 
 const filterObj = (obj, ...allowedFields) => {
   const newObj = {};
@@ -20,7 +83,6 @@ exports.getMe = (req, res, next) => {
 exports.getAllUsers = factory.getAll(User);
 
 exports.updateMe = catchAsync(async (req, res, next) => {
-  console.log('here');
   //if user sends any password or change password data error it out
   if (req.body.password || req.body.passwordConfirm) {
     return next(
@@ -33,6 +95,8 @@ exports.updateMe = catchAsync(async (req, res, next) => {
 
   //here we need to enter only the fields which allows user to update
   const filterBody = filterObj(req.body, 'name', 'email');
+  //updating the photo
+  if (req.file) filterBody.photo = req.file.filename;
   //here we are not changing any sensitive data and we dont want any validators to run so we using .findbyidandupdate
   const updatedUser = await User.findByIdAndUpdate(req.user.id, filterBody, {
     new: true,
